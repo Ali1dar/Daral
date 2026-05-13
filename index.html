@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>نظام دار التقنية المتكامل</title>
+    <!-- المكتبات -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #1a73e8; --success: #34a853; --danger: #d93025; --bg: #f8f9fa; --nav-h: 75px; }
+        body { margin: 0; padding: 0; background-color: var(--bg); font-family: 'Segoe UI', Tahoma, sans-serif; padding-bottom: 100px; }
+        .page { display: none; padding: 15px; animation: fadeIn 0.3s; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .card { background: white; border-radius: 20px; padding: 18px; margin-bottom: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #eee; }
+        input { width: 100%; padding: 14px; margin-bottom: 10px; border: 2px solid #f0f0f0; border-radius: 12px; box-sizing: border-box; font-size: 16px; outline: none; }
+        button { border: none; border-radius: 12px; cursor: pointer; font-weight: bold; padding: 14px; width: 100%; transition: 0.2s; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-primary { background: var(--primary); color: white; }
+        .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; height: var(--nav-h); box-shadow: 0 -5px 20px rgba(0,0,0,0.1); z-index: 9999; border-radius: 25px 25px 0 0; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; cursor: pointer; font-size: 12px; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+        .nav-item span { font-size: 24px; }
+        #reader, #storeReader { width: 100%; border-radius: 15px; display: none; overflow: hidden; margin-bottom: 15px; border: 3px solid var(--primary); background: #000; min-height: 250px; }
+        .item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #f1f1f1; }
+        .qty-control { display: flex; align-items: center; gap: 8px; }
+        .qty-btn { background: #f0f0f0; border-radius: 8px; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        @media print { body * { visibility: hidden; } #printArea, #printArea * { visibility: visible; } #printArea { position: absolute; left: 0; top: 0; width: 100%; text-align: center; direction: rtl; } }
+    </style>
+</head>
+<body>
+
+<div id="printArea" style="display:none; padding: 20px;">
+    <h2>دار التقنية</h2>
+    <hr><div id="printItems"></div><hr>
+    <h3 id="printTotal"></h3>
+</div>
+
+<!-- شاشة الدخول -->
+<div id="loginPage" class="page active">
+    <div class="card" style="margin-top: 50px; text-align: center;">
+        <h2 style="color: var(--primary);">🔐 نظام دار التقنية</h2>
+        <input id="email" type="email" placeholder="البريد الإلكتروني">
+        <input id="password" type="password" placeholder="كلمة المرور">
+        <button onclick="login()" class="btn-success" style="background: var(--primary);">دخول المزامنة</button>
+    </div>
+</div>
+
+<div id="mainContent" style="display: none;">
+    <!-- صفحة الكاشير -->
+    <div id="cashierPage" class="page">
+        <div class="card">
+            <button onclick="startScanner('reader')" style="background: #333; color: white; margin-bottom:10px;">📸 ماسح البيع</button>
+            <div id="reader"></div>
+            <input id="searchBox" placeholder="🔍 بحث عن منتج..." oninput="renderProducts()">
+        </div>
+        <div id="sellList"></div>
+        <div class="card" style="background: #fffbe6;">
+            <h3>🛒 السلة</h3>
+            <div id="cartList"></div>
+            <h2 id="totalPrice" style="color: var(--danger); border-top: 2px solid #ddd; padding-top:10px; margin-top:10px;">0 IQD</h2>
+            <button onclick="checkout()" class="btn-success" style="background: var(--danger); margin-top:10px;">إتمام البيع والطباعة 💳</button>
+        </div>
+    </div>
+
+    <!-- صفحة المخزن -->
+    <div id="storePage" class="page">
+        <div class="card">
+            <h3 id="formTitle">📦 إدارة المخزن</h3>
+            <input id="pId" type="hidden">
+            <input id="pName" placeholder="اسم المنتج">
+            <div style="display: flex; gap: 8px;">
+                <input id="pBarcode" placeholder="الباركود" style="flex: 1;">
+                <button onclick="startScanner('storeReader')" style="width: 60px; background: #333; color: white;">📸</button>
+            </div>
+            <div id="storeReader"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                <input id="pPrice" type="number" placeholder="بيع">
+                <input id="pCost" type="number" placeholder="كلفة">
+                <input id="pQty" type="number" placeholder="كمية">
+            </div>
+            <button onclick="saveProduct()" class="btn-primary" style="background: var(--success); margin-top:10px;">حفظ المنتج ✅</button>
+            <button id="cancelEditBtn" onclick="resetForm()" style="display:none; width:100%; margin-top:10px; background:#ddd;">إلغاء التعديل</button>
+        </div>
+        <div id="inventoryList"></div>
+    </div>
+
+    <!-- صفحة التقارير -->
+    <div id="reportsPage" class="page">
+        <div class="card" style="background: var(--primary); color: white; text-align: center;">
+            <p>مبيعات اليوم</p>
+            <h1 id="repDaySales">0</h1>
+            <button onclick="exportToExcel()" style="background: rgba(255,255,255,0.2); color:white; font-size:12px;">📥 تصدير Excel</button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="card" style="text-align: center;"> <small>ربح اليوم</small> <h3 id="repDayProfit" style="color: var(--success);">0</h3> </div>
+            <div class="card" style="text-align: center;"> <small>مبيعات الشهر</small> <h3 id="repMonthSales">0</h3> </div>
+        </div>
+    </div>
+
+    <!-- شريط التنقل السفلي -->
+    <div class="nav-bar">
+        <div class="nav-item active" onclick="showPage('cashierPage', this)"><span>🛒</span>كاشير</div>
+        <div class="nav-item" onclick="showPage('storePage', this)"><span>📦</span>مخزن</div>
+        <div class="nav-item" onclick="showPage('reportsPage', this)"><span>📊</span>تقارير</div>
+        <div class="nav-item" onclick="logout()" style="color: var(--danger);"><span>🚪</span>خروج</div>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, serverTimestamp, initializeFirestore, persistentLocalCache } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyCGf4CRs2kS1sho0HNJJjid8nexzdo_W0Y",
+    authDomain: "cashier-240db.firebaseapp.com",
+    projectId: "cashier-240db",
+    storageBucket: "cashier-240db.firebasestorage.app",
+    messagingSenderId: "142904604781",
+    appId: "1:142904604781:web:b0df9e00b113a15e216764"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = initializeFirestore(app, { localCache: persistentLocalCache() });
+const auth = getAuth(app);
+
+let products = []; let cart = []; let scannerInstance = null;
+
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        document.getElementById('loginPage').classList.remove('active');
+        document.getElementById('mainContent').style.display = 'block';
+        onSnapshot(query(collection(db, "users", user.uid, "products"), orderBy("createdAt", "desc")), (snap) => {
+            products = []; snap.forEach(d => products.push({id: d.id, ...d.data()}));
+            renderProducts();
+        });
+        onSnapshot(collection(db, "users", user.uid, "sales"), (snap) => updateReports(snap));
+    }
+});
+
+// --- وظائف الكاميرا والأذونات ---
+window.startScanner = async (divId) => {
+    const div = document.getElementById(divId);
+    if (div.style.display === 'none') {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+            stream.getTracks().forEach(t => t.stop());
+            div.style.display = 'block';
+            scannerInstance = new Html5Qrcode(divId);
+            await scannerInstance.start({ facingMode: "environment" }, { fps: 15, qrbox: 250 }, (text) => {
+                if(divId === 'reader') {
+                    const p = products.find(i => i.barcode === text);
+                    if(p) { addToCart(p.id); stopScanner(); }
+                } else {
+                    document.getElementById('pBarcode').value = text;
+                    stopScanner();
+                }
+            });
+        } catch (e) { alert("يجب تفعيل إذن الكاميرا من إعدادات الهاتف"); }
+    } else { stopScanner(); }
+};
+
+function stopScanner() { if(scannerInstance) { scannerInstance.stop().then(() => { 
+    document.getElementById('reader').style.display = 'none'; 
+    document.getElementById('storeReader').style.display = 'none'; 
+    scannerInstance = null; }); } }
+
+// --- وظائف السلة المحدثة ---
+window.addToCart = (id) => {
+    const p = products.find(x => x.id === id);
+    let item = cart.find(c => c.id === id);
+    if(item) {
+        if(item.count < p.qty) item.count++;
+        else alert("نفدت الكمية من المخزن!");
+    } else {
+        if(p.qty > 0) cart.push({...p, count: 1});
+        else alert("هذا المنتج غير متوفر حالياً");
+    }
+    renderCart();
+};
+
+window.decreaseCart = (id) => {
+    let item = cart.find(c => c.id === id);
+    if(item && item.count > 1) item.count--;
+    else cart = cart.filter(c => c.id !== id);
+    renderCart();
+};
+
+window.removeFromCart = (id) => {
+    cart = cart.filter(c => c.id !== id);
+    renderCart();
+};
+
+function renderCart() {
+    const list = document.getElementById('cartList');
+    let total = 0; list.innerHTML = "";
+    cart.forEach(c => {
+        total += c.price * c.count;
+        list.innerHTML += `
+            <div class="item-row">
+                <div><b>${c.name}</b><br><small>${c.price} IQD</small></div>
+                <div class="qty-control">
+                    <button class="qty-btn" onclick="decreaseCart('${c.id}')">-</button>
+                    <span>${c.count}</span>
+                    <button class="qty-btn" onclick="addToCart('${c.id}')">+</button>
+                    <button class="qty-btn" style="color:var(--danger)" onclick="removeFromCart('${c.id}')">🗑️</button>
+                </div>
+            </div>`;
+    });
+    document.getElementById('totalPrice').innerText = total.toLocaleString() + " IQD";
+}
+
+// --- إدارة المخزن ---
+window.saveProduct = async () => {
+    const pName = document.getElementById('pName').value.trim();
+    const pId = document.getElementById('pId').value;
+    if(!pName) return;
+    const data = {
+        name: pName,
+        barcode: document.getElementById('pBarcode').value || "0",
+        price: Number(document.getElementById('pPrice').value) || 0,
+        cost: Number(document.getElementById('pCost').value) || 0,
+        qty: Number(document.getElementById('pQty').value) || 0,
+        createdAt: serverTimestamp()
+    };
+    if(pId) await updateDoc(doc(db, "users", auth.currentUser.uid, "products", pId), data);
+    else await addDoc(collection(db, "users", auth.currentUser.uid, "products"), data);
+    alert("تم الحفظ ✅");
+    resetForm();
+};
+
+window.editProduct = (id) => {
+    const p = products.find(x => x.id === id);
+    document.getElementById('pId').value = p.id;
+    document.getElementById('pName').value = p.name;
+    document.getElementById('pBarcode').value = p.barcode;
+    document.getElementById('pPrice').value = p.price;
+    document.getElementById('pCost').value = p.cost;
+    document.getElementById('pQty').value = p.qty;
+    document.getElementById('formTitle').innerText = "✏️ تعديل المنتج";
+    document.getElementById('cancelEditBtn').style.display = "block";
+    showPage('storePage', document.querySelectorAll('.nav-item')[1]);
+};
+
+window.deleteProduct = async (id) => { if(confirm("حذف نهائي من المخزن؟")) await deleteDoc(doc(db, "users", auth.currentUser.uid, "products", id)); };
+
+window.renderProducts = () => {
+    const s = document.getElementById('searchBox').value.toLowerCase();
+    const sellList = document.getElementById('sellList');
+    const invList = document.getElementById('inventoryList');
+    sellList.innerHTML = ""; invList.innerHTML = "";
+    products.filter(p => p.name.toLowerCase().includes(s) || (p.barcode && p.barcode.includes(s))).forEach(p => {
+        sellList.innerHTML += `<div class="item-row"><div><b>${p.name}</b><br><small>${p.price} IQD</small></div><button onclick="addToCart('${p.id}')" style="width:60px; background:var(--primary); color:white;">🛒</button></div>`;
+        invList.innerHTML += `
+            <div class="item-row">
+                <div><b>${p.name}</b><br><small>كمية: ${p.qty}</small></div>
+                <div style="display:flex; gap:5px;">
+                    <button onclick="editProduct('${p.id}')" style="background:orange; color:white; width:45px;">✏️</button>
+                    <button onclick="deleteProduct('${p.id}')" style="background:var(--danger); color:white; width:45px;">🗑️</button>
+                </div>
+            </div>`;
+    });
+};
+
+// --- إتمام البيع والتقارير ---
+window.checkout = async () => {
+    if(cart.length === 0) return;
+    const tempCart = [...cart];
+    if(confirm("طباعة فاتورة؟")) {
+        let itemsHtml = ""; tempCart.forEach(i => itemsHtml += `<p>${i.name} x${i.count} .. ${i.price * i.count}</p>`);
+        document.getElementById('printItems').innerHTML = itemsHtml;
+        document.getElementById('printTotal').innerText = "المجموع: " + document.getElementById('totalPrice').innerText;
+        document.getElementById('printArea').style.display = 'block'; window.print(); document.getElementById('printArea').style.display = 'none';
+    }
+    cart = []; renderCart();
+    let tS = 0, tP = 0;
+    for (let item of tempCart) {
+        tS += item.price * item.count; tP += (item.price - item.cost) * item.count;
+        updateDoc(doc(db, "users", auth.currentUser.uid, "products", item.id), { qty: item.qty - item.count });
+    }
+    addDoc(collection(db, "users", auth.currentUser.uid, "sales"), { totalSale: tS, totalProfit: tP, date: new Date().toISOString() });
+    alert("تم البيع بنجاح ✅");
+};
+
+function updateReports(snap) {
+    let dP = 0, dS = 0, mS = 0; const now = new Date();
+    snap.forEach(s => {
+        const d = s.data(); const dD = new Date(d.date);
+        if(dD.toDateString() === now.toDateString()) { dP += d.totalProfit; dS += d.totalSale; }
+        if(dD.getMonth() === now.getMonth()) mS += d.totalSale;
+    });
+    document.getElementById('repDayProfit').innerText = dP.toLocaleString() + " IQD";
+    document.getElementById('repDaySales').innerText = dS.toLocaleString() + " IQD";
+    document.getElementById('repMonthSales').innerText = mS.toLocaleString() + " IQD";
+}
+
+// --- وظائف عامة ---
+window.resetForm = () => {
+    document.getElementById('pId').value = "";
+    document.getElementById('formTitle').innerText = "📦 إدارة المخزن";
+    document.querySelectorAll('#storePage input').forEach(i => i.value = "");
+    document.getElementById('cancelEditBtn').style.display = "none";
+};
+window.login = async () => { try { await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value); } catch(e) { alert("خطأ دخول"); } };
+window.logout = () => signOut(auth).then(() => location.reload());
+window.showPage = (id, el) => {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    stopScanner();
+};
+window.exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(products); const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stock"); XLSX.writeFile(wb, "Inventory_DarTaqniya.xlsx");
+};
+</script>
+</body>
+</html>
